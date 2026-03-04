@@ -726,3 +726,75 @@ def delete_movie(movie_id):
                 "request_id": str(uuid4())
             }
         }), 200
+
+# Update Movie Status
+@app.route('/api/v1/movies/<movie_id>/status', methods=['PATCH'])
+def update_movie_status(movie_id):
+    if request.method == 'PATCH':
+        data = request.get_json()
+
+        if data is None:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
+        new_status = data.get('status')
+        if new_status not in ['unwatched', 'watching', 'watched']:
+            return jsonify({
+                "success": False,
+                "message": "Validation failed",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [{"field": "status", "message": f'Status must be one of: unwatched, watching, watched.'}]        
+                },
+                "meta": {
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": str(uuid4())
+                }
+            }), 422
+        
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT * FROM movies WHERE id = ?', (movie_id,))
+        existing_movie = cursor.fetchone()
+
+        if not existing_movie:
+            db.close()
+            return jsonify({
+                "success": False,
+                "message": "Movie not found",
+                "error": {
+                    "code": "MOVIE_NOT_FOUND",
+                    "details": f"No movie found with ID {movie_id}"
+                },
+                "meta": {
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": str(uuid4())
+                }
+            }), 404
+        
+        date_watched = datetime.now().isoformat() if new_status == 'watched' else None
+        rating = None if new_status == 'unwatched' else existing_movie['rating']
+
+        cursor.execute('UPDATE movies SET status = ?, date_watched = ?, rating = ? WHERE id = ?', (new_status, date_watched, rating, movie_id))
+        db.commit()
+        db.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"Movie status updated to {new_status}",
+            "data": {
+                "id": movie_id,
+                "status": new_status,
+                "date_watched": date_watched,
+                "rating": rating
+            },
+            "meta": {
+                "timestamp": datetime.now().isoformat(),
+                "request_id": str(uuid4())
+            }
+        }), 200
+    
+# app health
+@app.route('/api/v1/health', methods=['GET'])
+def health_check():
+    if request.method == "GET":
+        pass
