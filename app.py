@@ -793,8 +793,109 @@ def update_movie_status(movie_id):
             }
         }), 200
     
+
+# Recommeded Movies Endpoint
+@app.route('/api/v1/movies/recommendations', methods=['GET'])
+def recommend_movies():
+    if request.method =="GET":
+        data= request.args.get('genres')
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "Invalid JSON data",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": [{"field": "genres", "message": "Genres field is required and must be an array of strings."}]        
+                },
+                "meta": {
+                    "timestamp": datetime.now().isoformat(),
+                    "request_id": str(uuid4())
+                }
+
+                }), 400
+        genres = data.get('genres')
+        db=get_db()
+        cursor=db.cursor()
+        cursor.execute('''
+            SELECT * FROM movies
+            WHERE status = 'unwatched' AND genre = ?
+            ORDER BY priority DESC ''', (genres,))
+        recommendations = cursor.fetchall()
+        db.close()
+    
+    
+    if not recommendations:
+        return jsonify({
+            "success": False,
+            "message": "No recommendations found",
+            "data": [],
+            "meta": {
+                "timestamp": datetime.now().isoformat(),
+                "request_id": str(uuid4())
+            }
+        }), 200
+    
+    return jsonify({
+        "success": True,
+        "message": "Recommended movies retrieved successfully",
+        "data": [dict(movie) for movie in recommendations],
+        "meta": {
+            "timestamp": datetime.now().isoformat(),
+            "request_id": str(uuid4())
+        }
+    }), 200
+
+
+
+# Smart Recommendation Endpoint
+@app.route('/api/v1/movies/recommendations/smart', methods=['GET'])
+def smart_recommend_movies():
+    if request.method =="GET":
+        db=get_db()
+        cursor=db.cursor()
+        cursor.execute('SELECT genre, AVG(rating) as avg_rating FROM movies WHERE status = "watched" AND rating IS NOT NULL GROUP BY genre ORDER BY avg_rating DESC')
+        top_genres = cursor.fetchone    ()
+
+        if top_genres:
+            cursor.execute('''
+        SELECT * FROM movies
+        WHERE status = 'unwatched' AND genre = ?
+        ORDER BY priority DESC
+    ''', (top_genres['genre'],))
+        recommendations = cursor.fetchall()
+    db.close()
+    
+    if not recommendations:
+        return jsonify({
+            "success": True,
+            "message": "No recommendations found",
+            "data": [],
+            "meta": {
+                "timestamp": datetime.now().isoformat(),
+                "request_id": str(uuid4())
+            }
+        }), 200
+    return jsonify({
+        "success": True,
+        "message": "Recommended movies retrieved successfully",
+        "data": [dict(movie) for movie in recommendations],
+        "meta": {
+            "timestamp": datetime.now().isoformat(),
+            "request_id": str(uuid4())
+        }
+    }),200
+
+
 # app health
 @app.route('/api/v1/health', methods=['GET'])
 def health_check():
     if request.method == "GET":
-        pass
+        return jsonify({
+            "success": True,
+            "message": "System status is healthy",
+            "meta": {
+                "timestamp": datetime.now().isoformat(),
+                "request_id": str(uuid4())
+            }
+        }), 200
