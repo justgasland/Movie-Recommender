@@ -40,7 +40,7 @@ def init_db():
     connection.close()
 
 
-
+init_db()
 def get_db():
     connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
@@ -331,7 +331,7 @@ def get_movie(movie_id):
 
 @app.route('/api/v1/movies/<movie_id>', methods=['PATCH'])
 def update_movie(movie_id):
-    if request.method == 'PUT':
+    if request.method == 'PATCH':
         data = request.get_json()
 
         if data is None:
@@ -389,16 +389,6 @@ def update_movie(movie_id):
         if status is not None:
             if status not in ['unwatched', 'watching', 'watched']:
                 errors.append({"field": "status", "message": f'Status must be one of: unwatched, watching, watched.'})
-                
-        current_year = datetime.now().year
-        if not release_year:
-            errors.append({"field": "release_year", "message": "Release year is required."})
-        elif not isinstance(release_year, int):
-            errors.append({"field": "release_year", "message": "Release year must be an integer."})     
-        elif release_year < 1888:
-            errors.append({"field": "release_year", "message": "Release year must be 1888 or later."})
-        elif release_year > current_year:
-            errors.append({"field": "release_year", "message": f'Release year cannot be in the future (must be {current_year} or earlier).'})
         
         
 
@@ -583,10 +573,11 @@ def replace_movie(movie_id):
             errors.append({"field": "release_year", "message": f'Release year cannot be in the future (must be {current_year} or earlier).'})
         
         if not status:
-            status = 'unwatched'  
+            status == 'unwatched'  
         elif status not in ['unwatched', 'watching', 'watched']:
                 errors.append({"field": "status", "message": f'Status must be one of: unwatched, watching, watched.'})
-
+                if status=='watched':
+                    date_watched = datetime.now().isoformat()
 
         # Optional fields validation
         rating = data.get('rating')
@@ -661,6 +652,7 @@ def replace_movie(movie_id):
             }
             }), 422
         else:
+            
             insert_query = '''UPDATE movies SET title = ?, genre = ?, release_year = ?, status = ?, rating = ?, description = ?, director = ?, runtime_minutes = ?, poster_url = ?, priority = ?, notes = ?, date_watched = ? WHERE id = ?'''
             db = get_db()
             cursor.execute(insert_query, (title.strip(), genre.strip(), release_year, status, rating, description, director, runtime_minutes, poster_url, priority, notes, date_watched, movie_id))
@@ -814,13 +806,12 @@ def recommend_movies():
                 }
 
                 }), 400
-        genres = data.get('genres')
         db=get_db()
         cursor=db.cursor()
         cursor.execute('''
             SELECT * FROM movies
             WHERE status = 'unwatched' AND genre = ?
-            ORDER BY priority DESC ''', (genres,))
+            ORDER BY priority DESC ''', (data,))
         recommendations = cursor.fetchall()
         db.close()
     
@@ -855,7 +846,7 @@ def smart_recommend_movies():
         db=get_db()
         cursor=db.cursor()
         cursor.execute('SELECT genre, AVG(rating) as avg_rating FROM movies WHERE status = "watched" AND rating IS NOT NULL GROUP BY genre ORDER BY avg_rating DESC')
-        top_genres = cursor.fetchone    ()
+        top_genres = cursor.fetchone()
 
         if top_genres:
             cursor.execute('''
@@ -863,8 +854,8 @@ def smart_recommend_movies():
         WHERE status = 'unwatched' AND genre = ?
         ORDER BY priority DESC
     ''', (top_genres['genre'],))
-        recommendations = cursor.fetchall()
-    db.close()
+            recommendations = cursor.fetchall()
+        db.close()
     
     if not recommendations:
         return jsonify({
@@ -899,3 +890,7 @@ def health_check():
                 "request_id": str(uuid4())
             }
         }), 200
+
+
+if __name__ == '__main__': 
+    app.run(debug=True)
